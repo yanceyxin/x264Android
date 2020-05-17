@@ -540,6 +540,7 @@ static int param_apply_preset( x264_param_t *param, const char *preset )
     }
     else if(!strcasecmp( preset, "bestandroid"))
     {
+        /*just for Android live encode by yancey on 2020.5*/
 
     }
     else
