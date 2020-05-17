@@ -538,6 +538,10 @@ static int param_apply_preset( x264_param_t *param, const char *preset )
         param->i_bframe = 16;
         param->rc.i_lookahead = 60;
     }
+    else if(!strcasecmp( preset, "bestandroid"))
+    {
+
+    }
     else
     {
         x264_log_internal( X264_LOG_ERROR, "invalid preset '%s'\n", preset );

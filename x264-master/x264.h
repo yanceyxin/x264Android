@@ -653,7 +653,7 @@ X264_API int x264_param_parse( x264_param_t *, const char *name, const char *val
  *      (either can be NULL, which implies no preset or no tune, respectively)
  *
  *      Currently available presets are, ordered from fastest to slowest: */
-static const char * const x264_preset_names[] = { "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo", 0 };
+static const char * const x264_preset_names[] = { "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo", "bestandroid" 0 };
 
 /*      The presets can also be indexed numerically, as in:
  *      x264_param_default_preset( &param, "3", ... )
