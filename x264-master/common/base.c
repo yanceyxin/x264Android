@@ -541,6 +541,9 @@ static int param_apply_preset( x264_param_t *param, const char *preset )
     else if(!strcasecmp( preset, "bestandroid"))
     {
         /*just for Android live encode by yancey on 2020.5*/
+        param->i_bframe = 0;//The largest number is 2,bframe=2
+        param->i_bframe_adaptive = X264_B_ADAPT_NONE;
+        
 
     }
     else
