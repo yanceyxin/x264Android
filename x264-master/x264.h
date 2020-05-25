@@ -654,7 +654,7 @@ X264_API int x264_param_parse( x264_param_t *, const char *name, const char *val
  *      (either can be NULL, which implies no preset or no tune, respectively)
  *
  *      Currently available presets are, ordered from fastest to slowest: */
-static const char * const x264_preset_names[] = { "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo", "bestandroid" 0 };
+static const char * const x264_preset_names[] = { "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "placebo", "bestandroid", 0 };
 
 /*      The presets can also be indexed numerically, as in:
  *      x264_param_default_preset( &param, "3", ... )
@@ -859,6 +859,15 @@ typedef struct x264_picture_t
     x264_sei_t extra_sei;
     /* private user data. copied from input to output frames. */
     void *opaque;
+    //for test by yancey
+    int face_max_x;
+    int face_max_y;
+    int face_min_x;
+    int face_min_y;
+    int pk_flag;
+    int sei_data;
+    int Frame_qp;
+    int Frame265_qp;
 } x264_picture_t;
 
 /* x264_picture_init:
