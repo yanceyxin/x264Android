@@ -508,10 +508,12 @@ static int param_apply_preset( x264_param_t *param, const char *preset )
         param->rc.i_lookahead = 10;
         param->rc.i_qp_min = 8;
         param->rc.i_qp_max = 50;
+        param->rc.b_mb_tree = 1;
         param->i_bframe = 0;
         param->i_bframe_adaptive = X264_B_ADAPT_NONE;
-        param->b_cabac = 1;
+        param->b_cabac = 0;
         param->i_cabac_init_idc = 0;
+
     }
     else
     {

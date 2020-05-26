@@ -420,7 +420,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
         m->cost = X264_MIN( bpred_cost, bcost );
     }
     /* subpel refine */
-    if(bcost > 200){
+    if(bcost > 50){
         if( h->mb.i_subpel_refine >= 2 ){
             int hpel = subpel_iterations[h->mb.i_subpel_refine][2];
             int qpel = subpel_iterations[h->mb.i_subpel_refine][3];
