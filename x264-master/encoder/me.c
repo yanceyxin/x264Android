@@ -188,7 +188,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
     int i_me_range = h->param.analyse.i_me_range;
     int bmx, bmy, bcost = COST_MAX;
     int bpred_cost = COST_MAX;
-    int omx, omy, pmx, pmy;
+    int pmx, pmy;
     pixel *p_fenc = m->p_fenc[0];
     pixel *p_fref_w = m->p_fref_w;
     ALIGNED_ARRAY_32( pixel, pix,[16*16] );
@@ -319,56 +319,36 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
 
     switch( h->mb.i_me_method )
     {
-        case X264_ME_ANDROID:
-        {
-            /*nothing*/
-            break;
-        }
         case X264_ME_DIA:
         {
-            /* diamond search, radius 1 */
-            bcost <<= 4;
-            int i = i_me_range;
-            do
-            {
-                COST_MV_X4_DIR( 0,-1, 0,1, -1,0, 1,0, costs );
-                COPY1_IF_LT( bcost, (costs[0]<<4)+1 );
-                COPY1_IF_LT( bcost, (costs[1]<<4)+3 );
-                COPY1_IF_LT( bcost, (costs[2]<<4)+4 );
-                COPY1_IF_LT( bcost, (costs[3]<<4)+12 );
-                if( !(bcost&15) )
-                    break;
-                bmx -= (bcost<<28)>>30;
-                bmy -= (bcost<<30)>>30;
-                bcost &= ~15;
-            } while( --i && CHECK_MVRANGE(bmx, bmy) );
-            bcost >>= 4;
+            /*created by yancey on 2020.5.27*/
+            if(h->param.analyse._no_me_method){
+                /*nothing*/
+                //printf("---\n");
+            }else{
+                /* diamond search, radius 1 */
+                bcost <<= 4;
+                int i = i_me_range;
+                do
+                {
+                    COST_MV_X4_DIR( 0,-1, 0,1, -1,0, 1,0, costs );
+                    COPY1_IF_LT( bcost, (costs[0]<<4)+1 );
+                    COPY1_IF_LT( bcost, (costs[1]<<4)+3 );
+                    COPY1_IF_LT( bcost, (costs[2]<<4)+4 );
+                    COPY1_IF_LT( bcost, (costs[3]<<4)+12 );
+                    if( !(bcost&15) )
+                        break;
+                    bmx -= (bcost<<28)>>30;
+                    bmy -= (bcost<<30)>>30;
+                    bcost &= ~15;
+                } while( --i && CHECK_MVRANGE(bmx, bmy) );
+                bcost >>= 4;
+            } 
             break;
         }
-
         case X264_ME_HEX:
         {
-    me_hex2:
             /* hexagon search, radius 2 */
-    #if 0
-            for( int i = 0; i < i_me_range/2; i++ )
-            {
-                omx = bmx; omy = bmy;
-                COST_MV( omx-2, omy   );
-                COST_MV( omx-1, omy+2 );
-                COST_MV( omx+1, omy+2 );
-                COST_MV( omx+2, omy   );
-                COST_MV( omx+1, omy-2 );
-                COST_MV( omx-1, omy-2 );
-                if( bmx == omx && bmy == omy )
-                    break;
-                if( !CHECK_MVRANGE(bmx, bmy) )
-                    break;
-            }
-    #else
-            /* equivalent to the above, but eliminates duplicate candidates */
-
-            /* hexagon */
             COST_MV_X3_DIR( -2,0, -1, 2,  1, 2, costs   );
             COST_MV_X3_DIR(  2,0,  1,-2, -1,-2, costs+4 ); /* +4 for 16-byte alignment */
             bcost <<= 3;
@@ -405,7 +385,6 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
                 }
             }
             bcost >>= 3;
-    #endif
             /* square refine */
             bcost <<= 4;
             COST_MV_X4_DIR(  0,-1,  0,1, -1,0, 1,0, costs );
@@ -423,359 +402,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
             bcost >>= 4;
             break;
         }
-
-        case X264_ME_UMH:
-        {
-            /* Uneven-cross Multi-Hexagon-grid Search
-             * as in JM, except with different early termination */
-
-            static const uint8_t pixel_size_shift[7] = { 0, 1, 1, 2, 3, 3, 4 };
-
-            int ucost1, ucost2;
-            int cross_start = 1;
-
-            /* refine predictors */
-            ucost1 = bcost;
-            DIA1_ITER( pmx, pmy );
-            if( pmx | pmy )
-                DIA1_ITER( 0, 0 );
-
-            if( i_pixel == PIXEL_4x4 )
-                goto me_hex2;
-
-            ucost2 = bcost;
-            if( (bmx | bmy) && ((bmx-pmx) | (bmy-pmy)) )
-                DIA1_ITER( bmx, bmy );
-            if( bcost == ucost2 )
-                cross_start = 3;
-            omx = bmx; omy = bmy;
-
-            /* early termination */
-#define SAD_THRESH(v) ( bcost < ( v >> pixel_size_shift[i_pixel] ) )
-            if( bcost == ucost2 && SAD_THRESH(2000) )
-            {
-                COST_MV_X4( 0,-2, -1,-1, 1,-1, -2,0 );
-                COST_MV_X4( 2, 0, -1, 1, 1, 1,  0,2 );
-                if( bcost == ucost1 && SAD_THRESH(500) )
-                    break;
-                if( bcost == ucost2 )
-                {
-                    int range = (i_me_range>>1) | 1;
-                    CROSS( 3, range, range );
-                    COST_MV_X4( -1,-2, 1,-2, -2,-1, 2,-1 );
-                    COST_MV_X4( -2, 1, 2, 1, -1, 2, 1, 2 );
-                    if( bcost == ucost2 )
-                        break;
-                    cross_start = range + 2;
-                }
-            }
-
-            /* adaptive search range */
-            if( i_mvc )
-            {
-                /* range multipliers based on casual inspection of some statistics of
-                 * average distance between current predictor and final mv found by ESA.
-                 * these have not been tuned much by actual encoding. */
-                static const uint8_t range_mul[4][4] =
-                {
-                    { 3, 3, 4, 4 },
-                    { 3, 4, 4, 4 },
-                    { 4, 4, 4, 5 },
-                    { 4, 4, 5, 6 },
-                };
-                int mvd;
-                int sad_ctx, mvd_ctx;
-                int denom = 1;
-
-                if( i_mvc == 1 )
-                {
-                    if( i_pixel == PIXEL_16x16 )
-                        /* mvc is probably the same as mvp, so the difference isn't meaningful.
-                         * but prediction usually isn't too bad, so just use medium range */
-                        mvd = 25;
-                    else
-                        mvd = abs( m->mvp[0] - mvc[0][0] )
-                            + abs( m->mvp[1] - mvc[0][1] );
-                }
-                else
-                {
-                    /* calculate the degree of agreement between predictors. */
-                    /* in 16x16, mvc includes all the neighbors used to make mvp,
-                     * so don't count mvp separately. */
-                    denom = i_mvc - 1;
-                    mvd = 0;
-                    if( i_pixel != PIXEL_16x16 )
-                    {
-                        mvd = abs( m->mvp[0] - mvc[0][0] )
-                            + abs( m->mvp[1] - mvc[0][1] );
-                        denom++;
-                    }
-                    mvd += x264_predictor_difference( mvc, i_mvc );
-                }
-
-                sad_ctx = SAD_THRESH(1000) ? 0
-                        : SAD_THRESH(2000) ? 1
-                        : SAD_THRESH(4000) ? 2 : 3;
-                mvd_ctx = mvd < 10*denom ? 0
-                        : mvd < 20*denom ? 1
-                        : mvd < 40*denom ? 2 : 3;
-
-                i_me_range = i_me_range * range_mul[mvd_ctx][sad_ctx] >> 2;
-            }
-
-            /* FIXME if the above DIA2/OCT2/CROSS found a new mv, it has not updated omx/omy.
-             * we are still centered on the same place as the DIA2. is this desirable? */
-            CROSS( cross_start, i_me_range, i_me_range>>1 );
-
-            COST_MV_X4( -2,-2, -2,2, 2,-2, 2,2 );
-
-            /* hexagon grid */
-            omx = bmx; omy = bmy;
-            const uint16_t *p_cost_omvx = p_cost_mvx + omx*4;
-            const uint16_t *p_cost_omvy = p_cost_mvy + omy*4;
-            int i = 1;
-            do
-            {
-                static const int8_t hex4[16][2] = {
-                    { 0,-4}, { 0, 4}, {-2,-3}, { 2,-3},
-                    {-4,-2}, { 4,-2}, {-4,-1}, { 4,-1},
-                    {-4, 0}, { 4, 0}, {-4, 1}, { 4, 1},
-                    {-4, 2}, { 4, 2}, {-2, 3}, { 2, 3},
-                };
-
-                if( 4*i > X264_MIN4( mv_x_max-omx, omx-mv_x_min,
-                                     mv_y_max-omy, omy-mv_y_min ) )
-                {
-                    for( int j = 0; j < 16; j++ )
-                    {
-                        int mx = omx + hex4[j][0]*i;
-                        int my = omy + hex4[j][1]*i;
-                        if( CHECK_MVRANGE(mx, my) )
-                            COST_MV( mx, my );
-                    }
-                }
-                else
-                {
-                    int dir = 0;
-                    pixel *pix_base = p_fref_w + omx + (omy-4*i)*stride;
-                    int dy = i*stride;
-#define SADS(k,x0,y0,x1,y1,x2,y2,x3,y3)\
-                    h->pixf.fpelcmp_x4[i_pixel]( p_fenc,\
-                            pix_base x0*i+(y0-2*k+4)*dy,\
-                            pix_base x1*i+(y1-2*k+4)*dy,\
-                            pix_base x2*i+(y2-2*k+4)*dy,\
-                            pix_base x3*i+(y3-2*k+4)*dy,\
-                            stride, costs+4*k );\
-                    pix_base += 2*dy;
-#define ADD_MVCOST(k,x,y) costs[k] += p_cost_omvx[x*4*i] + p_cost_omvy[y*4*i]
-#define MIN_MV(k,x,y)     COPY2_IF_LT( bcost, costs[k], dir, x*16+(y&15) )
-                    SADS( 0, +0,-4, +0,+4, -2,-3, +2,-3 );
-                    SADS( 1, -4,-2, +4,-2, -4,-1, +4,-1 );
-                    SADS( 2, -4,+0, +4,+0, -4,+1, +4,+1 );
-                    SADS( 3, -4,+2, +4,+2, -2,+3, +2,+3 );
-                    ADD_MVCOST(  0, 0,-4 );
-                    ADD_MVCOST(  1, 0, 4 );
-                    ADD_MVCOST(  2,-2,-3 );
-                    ADD_MVCOST(  3, 2,-3 );
-                    ADD_MVCOST(  4,-4,-2 );
-                    ADD_MVCOST(  5, 4,-2 );
-                    ADD_MVCOST(  6,-4,-1 );
-                    ADD_MVCOST(  7, 4,-1 );
-                    ADD_MVCOST(  8,-4, 0 );
-                    ADD_MVCOST(  9, 4, 0 );
-                    ADD_MVCOST( 10,-4, 1 );
-                    ADD_MVCOST( 11, 4, 1 );
-                    ADD_MVCOST( 12,-4, 2 );
-                    ADD_MVCOST( 13, 4, 2 );
-                    ADD_MVCOST( 14,-2, 3 );
-                    ADD_MVCOST( 15, 2, 3 );
-                    MIN_MV(  0, 0,-4 );
-                    MIN_MV(  1, 0, 4 );
-                    MIN_MV(  2,-2,-3 );
-                    MIN_MV(  3, 2,-3 );
-                    MIN_MV(  4,-4,-2 );
-                    MIN_MV(  5, 4,-2 );
-                    MIN_MV(  6,-4,-1 );
-                    MIN_MV(  7, 4,-1 );
-                    MIN_MV(  8,-4, 0 );
-                    MIN_MV(  9, 4, 0 );
-                    MIN_MV( 10,-4, 1 );
-                    MIN_MV( 11, 4, 1 );
-                    MIN_MV( 12,-4, 2 );
-                    MIN_MV( 13, 4, 2 );
-                    MIN_MV( 14,-2, 3 );
-                    MIN_MV( 15, 2, 3 );
-#undef SADS
-#undef ADD_MVCOST
-#undef MIN_MV
-                    if( dir )
-                    {
-                        bmx = omx + i*(dir>>4);
-                        bmy = omy + i*((dir<<28)>>28);
-                    }
-                }
-            } while( ++i <= i_me_range>>2 );
-            if( bmy <= mv_y_max && bmy >= mv_y_min && bmx <= mv_x_max && bmx >= mv_x_min )
-                goto me_hex2;
-            break;
-        }
-
-        case X264_ME_ESA:
-        case X264_ME_TESA:
-        {
-            const int min_x = X264_MAX( bmx - i_me_range, mv_x_min );
-            const int min_y = X264_MAX( bmy - i_me_range, mv_y_min );
-            const int max_x = X264_MIN( bmx + i_me_range, mv_x_max );
-            const int max_y = X264_MIN( bmy + i_me_range, mv_y_max );
-            /* SEA is fastest in multiples of 4 */
-            const int width = (max_x - min_x + 3) & ~3;
-#if 0
-            /* plain old exhaustive search */
-            for( int my = min_y; my <= max_y; my++ )
-                for( int mx = min_x; mx < min_x + width; mx++ )
-                    COST_MV( mx, my );
-#else
-            /* successive elimination by comparing DC before a full SAD,
-             * because sum(abs(diff)) >= abs(diff(sum)). */
-            uint16_t *sums_base = m->integral;
-            ALIGNED_ARRAY_16( int, enc_dc,[4] );
-            int sad_size = i_pixel <= PIXEL_8x8 ? PIXEL_8x8 : PIXEL_4x4;
-            int delta = x264_pixel_size[sad_size].w;
-            int16_t *xs = h->scratch_buffer;
-            int xn;
-            uint16_t *cost_fpel_mvx = h->cost_mv_fpel[h->mb.i_qp][-m->mvp[0]&3] + (-m->mvp[0]>>2);
-
-            h->pixf.sad_x4[sad_size]( (pixel*)x264_zero, p_fenc, p_fenc+delta,
-                p_fenc+delta*FENC_STRIDE, p_fenc+delta+delta*FENC_STRIDE,
-                FENC_STRIDE, enc_dc );
-            if( delta == 4 )
-                sums_base += stride * (h->fenc->i_lines[0] + PADV*2);
-            if( i_pixel == PIXEL_16x16 || i_pixel == PIXEL_8x16 || i_pixel == PIXEL_4x8 )
-                delta *= stride;
-            if( i_pixel == PIXEL_8x16 || i_pixel == PIXEL_4x8 )
-                enc_dc[1] = enc_dc[2];
-
-            if( h->mb.i_me_method == X264_ME_TESA )
-            {
-                // ADS threshold, then SAD threshold, then keep the best few SADs, then SATD
-                mvsad_t *mvsads = (mvsad_t *)(xs + ((width+31)&~31) + 4);
-                int nmvsad = 0, limit;
-                int sad_thresh = i_me_range <= 16 ? 10 : i_me_range <= 24 ? 11 : 12;
-                int bsad = h->pixf.sad[i_pixel]( p_fenc, FENC_STRIDE, p_fref_w+bmy*stride+bmx, stride )
-                         + BITS_MVD( bmx, bmy );
-                for( int my = min_y; my <= max_y; my++ )
-                {
-                    int i;
-                    int ycost = p_cost_mvy[my<<2];
-                    if( bsad <= ycost )
-                        continue;
-                    bsad -= ycost;
-                    xn = h->pixf.ads[i_pixel]( enc_dc, sums_base + min_x + my * stride, delta,
-                                               cost_fpel_mvx+min_x, xs, width, bsad * 17 >> 4 );
-                    for( i = 0; i < xn-2; i += 3 )
-                    {
-                        pixel *ref = p_fref_w+min_x+my*stride;
-                        ALIGNED_ARRAY_16( int, sads,[4] ); /* padded to [4] for asm */
-                        h->pixf.sad_x3[i_pixel]( p_fenc, ref+xs[i], ref+xs[i+1], ref+xs[i+2], stride, sads );
-                        for( int j = 0; j < 3; j++ )
-                        {
-                            int sad = sads[j] + cost_fpel_mvx[xs[i+j]];
-                            if( sad < bsad*sad_thresh>>3 )
-                            {
-                                COPY1_IF_LT( bsad, sad );
-                                mvsads[nmvsad].sad = sad + ycost;
-                                mvsads[nmvsad].mv[0] = min_x+xs[i+j];
-                                mvsads[nmvsad].mv[1] = my;
-                                nmvsad++;
-                            }
-                        }
-                    }
-                    for( ; i < xn; i++ )
-                    {
-                        int mx = min_x+xs[i];
-                        int sad = h->pixf.sad[i_pixel]( p_fenc, FENC_STRIDE, p_fref_w+mx+my*stride, stride )
-                                + cost_fpel_mvx[xs[i]];
-                        if( sad < bsad*sad_thresh>>3 )
-                        {
-                            COPY1_IF_LT( bsad, sad );
-                            mvsads[nmvsad].sad = sad + ycost;
-                            mvsads[nmvsad].mv[0] = mx;
-                            mvsads[nmvsad].mv[1] = my;
-                            nmvsad++;
-                        }
-                    }
-                    bsad += ycost;
-                }
-
-                limit = i_me_range >> 1;
-                sad_thresh = bsad*sad_thresh>>3;
-                while( nmvsad > limit*2 && sad_thresh > bsad )
-                {
-                    int i = 0;
-                    // halve the range if the domain is too large... eh, close enough
-                    sad_thresh = (sad_thresh + bsad) >> 1;
-                    while( i < nmvsad && mvsads[i].sad <= sad_thresh )
-                        i++;
-                    for( int j = i; j < nmvsad; j++ )
-                    {
-                        uint32_t sad;
-                        if( WORD_SIZE == 8 && sizeof(mvsad_t) == 8 )
-                        {
-                            uint64_t mvsad = M64( &mvsads[i] ) = M64( &mvsads[j] );
-#if WORDS_BIGENDIAN
-                            mvsad >>= 32;
-#endif
-                            sad = mvsad;
-                        }
-                        else
-                        {
-                            sad = mvsads[j].sad;
-                            CP32( mvsads[i].mv, mvsads[j].mv );
-                            mvsads[i].sad = sad;
-                        }
-                        i += (sad - (sad_thresh+1)) >> 31;
-                    }
-                    nmvsad = i;
-                }
-                while( nmvsad > limit )
-                {
-                    int bi = 0;
-                    for( int i = 1; i < nmvsad; i++ )
-                        if( mvsads[i].sad > mvsads[bi].sad )
-                            bi = i;
-                    nmvsad--;
-                    if( sizeof( mvsad_t ) == sizeof( uint64_t ) )
-                        CP64( &mvsads[bi], &mvsads[nmvsad] );
-                    else
-                        mvsads[bi] = mvsads[nmvsad];
-                }
-                for( int i = 0; i < nmvsad; i++ )
-                    COST_MV( mvsads[i].mv[0], mvsads[i].mv[1] );
-            }
-            else
-            {
-                // just ADS and SAD
-                for( int my = min_y; my <= max_y; my++ )
-                {
-                    int i;
-                    int ycost = p_cost_mvy[my<<2];
-                    if( bcost <= ycost )
-                        continue;
-                    bcost -= ycost;
-                    xn = h->pixf.ads[i_pixel]( enc_dc, sums_base + min_x + my * stride, delta,
-                                               cost_fpel_mvx+min_x, xs, width, bcost );
-                    for( i = 0; i < xn-2; i += 3 )
-                        COST_MV_X3_ABS( min_x+xs[i],my, min_x+xs[i+1],my, min_x+xs[i+2],my );
-                    bcost += ycost;
-                    for( ; i < xn; i++ )
-                        COST_MV( min_x+xs[i], my );
-                }
-            }
-#endif
-        }
-        break;
     }
-
     /* -> qpel mv */
     uint32_t bmv = pack16to32_mask(bmx,bmy);
     uint32_t bmv_spel = SPELx2(bmv);
@@ -792,13 +419,13 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
         M32(m->mv) = bpred_cost < bcost ? bpred_mv : bmv_spel;
         m->cost = X264_MIN( bpred_cost, bcost );
     }
-
     /* subpel refine */
-    if( h->mb.i_subpel_refine >= 2 )
-    {
-        int hpel = subpel_iterations[h->mb.i_subpel_refine][2];
-        int qpel = subpel_iterations[h->mb.i_subpel_refine][3];
-        refine_subpel( h, m, hpel, qpel, p_halfpel_thresh, 0 );
+    if(bcost > 200){
+        if( h->mb.i_subpel_refine >= 2 ){
+            int hpel = subpel_iterations[h->mb.i_subpel_refine][2];
+            int qpel = subpel_iterations[h->mb.i_subpel_refine][3];
+            refine_subpel( h, m, hpel, qpel, p_halfpel_thresh, 0 );
+        }
     }
 }
 #undef COST_MV

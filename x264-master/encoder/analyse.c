@@ -597,16 +597,8 @@ static void mb_analyse_intra_chroma( x264_t *h, x264_mb_analysis_t *a )
         }
 
         /* Cheap approximation of chroma costs to avoid a full i4x4/i8x8 analysis. */
-        if( h->mb.b_lossless )
-        {
-            x264_predict_lossless_16x16( h, 1, a->i_predict16x16 );
-            x264_predict_lossless_16x16( h, 2, a->i_predict16x16 );
-        }
-        else
-        {
-            h->predict_16x16[a->i_predict16x16]( h->mb.pic.p_fdec[1] );
-            h->predict_16x16[a->i_predict16x16]( h->mb.pic.p_fdec[2] );
-        }
+        h->predict_16x16[a->i_predict16x16]( h->mb.pic.p_fdec[1] );
+        h->predict_16x16[a->i_predict16x16]( h->mb.pic.p_fdec[2] );
         a->i_satd_chroma = h->pixf.mbcmp[PIXEL_16x16]( h->mb.pic.p_fenc[1], FENC_STRIDE, h->mb.pic.p_fdec[1], FDEC_STRIDE )
                          + h->pixf.mbcmp[PIXEL_16x16]( h->mb.pic.p_fenc[2], FENC_STRIDE, h->mb.pic.p_fdec[2], FDEC_STRIDE );
         return;
@@ -616,7 +608,7 @@ static void mb_analyse_intra_chroma( x264_t *h, x264_mb_analysis_t *a )
     int chromapix = h->luma2chroma_pixel[PIXEL_16x16];
 
     /* Prediction selection for chroma */
-    if( predict_mode[3] >= 0 && !h->mb.b_lossless )
+    if( predict_mode[3] >= 0)
     {
         int satdu[4], satdv[4];
         h->pixf.intra_mbcmp_x3_chroma( h->mb.pic.p_fenc[1], h->mb.pic.p_fdec[1], satdu );
@@ -643,14 +635,8 @@ static void mb_analyse_intra_chroma( x264_t *h, x264_mb_analysis_t *a )
             int i_mode = *predict_mode;
 
             /* we do the prediction */
-            if( h->mb.b_lossless )
-                x264_predict_lossless_chroma( h, i_mode );
-            else
-            {
-                h->predict_chroma[i_mode]( h->mb.pic.p_fdec[1] );
-                h->predict_chroma[i_mode]( h->mb.pic.p_fdec[2] );
-            }
-
+            h->predict_chroma[i_mode]( h->mb.pic.p_fdec[1] );
+            h->predict_chroma[i_mode]( h->mb.pic.p_fdec[2] );
             /* we calculate the cost */
             i_satd = h->pixf.mbcmp[chromapix]( h->mb.pic.p_fenc[1], FENC_STRIDE, h->mb.pic.p_fdec[1], FDEC_STRIDE ) +
                      h->pixf.mbcmp[chromapix]( h->mb.pic.p_fenc[2], FENC_STRIDE, h->mb.pic.p_fdec[2], FDEC_STRIDE ) +
@@ -1334,13 +1320,8 @@ static void intra_rd_refine( x264_t *h, x264_mb_analysis_t *a )
                 for( int i = 0; i < i_max; i++ )
                 {
                     int i_mode = predict_mode_sorted[i];
-                    if( h->mb.b_lossless )
-                        x264_predict_lossless_chroma( h, i_mode );
-                    else
-                    {
-                        h->predict_chroma[i_mode]( h->mb.pic.p_fdec[1] );
-                        h->predict_chroma[i_mode]( h->mb.pic.p_fdec[2] );
-                    }
+                    h->predict_chroma[i_mode]( h->mb.pic.p_fdec[1] );
+                    h->predict_chroma[i_mode]( h->mb.pic.p_fdec[2] );
                     /* if we've already found a mode that needs no residual, then
                      * probably any mode with a residual will be worse.
                      * so avoid dct on the remaining modes to improve speed. */
@@ -2522,7 +2503,7 @@ static void refine_bidir( x264_t *h, x264_mb_analysis_t *a )
 
 static inline void mb_analyse_transform( x264_t *h )
 {
-    if( x264_mb_transform_8x8_allowed( h ) && h->param.analyse.b_transform_8x8 && !h->mb.b_lossless )
+    if( x264_mb_transform_8x8_allowed( h ) && h->param.analyse.b_transform_8x8 )
     {
         /* Only luma MC is really needed for 4:2:0, but the full MC is re-used in macroblock_encode. */
         x264_mb_mc( h );

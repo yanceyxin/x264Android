@@ -492,56 +492,11 @@ static int param_apply_preset( x264_param_t *param, const char *preset )
     {
         /* Default is medium */
     }
-    else if( !strcasecmp( preset, "slow" ) )
-    {
-        param->analyse.i_subpel_refine = 8;
-        param->i_frame_reference = 5;
-        param->analyse.i_direct_mv_pred = X264_DIRECT_PRED_AUTO;
-        param->analyse.i_trellis = 2;
-        param->rc.i_lookahead = 50;
-    }
-    else if( !strcasecmp( preset, "slower" ) )
-    {
-        param->analyse.i_me_method = X264_ME_UMH;
-        param->analyse.i_subpel_refine = 9;
-        param->i_frame_reference = 8;
-        param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS;
-        param->analyse.i_direct_mv_pred = X264_DIRECT_PRED_AUTO;
-        param->analyse.inter |= X264_ANALYSE_PSUB8x8;
-        param->analyse.i_trellis = 2;
-        param->rc.i_lookahead = 60;
-    }
-    else if( !strcasecmp( preset, "veryslow" ) )
-    {
-        param->analyse.i_me_method = X264_ME_UMH;
-        param->analyse.i_subpel_refine = 10;
-        param->analyse.i_me_range = 24;
-        param->i_frame_reference = 16;
-        param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS;
-        param->analyse.i_direct_mv_pred = X264_DIRECT_PRED_AUTO;
-        param->analyse.inter |= X264_ANALYSE_PSUB8x8;
-        param->analyse.i_trellis = 2;
-        param->i_bframe = 8;
-        param->rc.i_lookahead = 60;
-    }
-    else if( !strcasecmp( preset, "placebo" ) )
-    {
-        param->analyse.i_me_method = X264_ME_TESA;
-        param->analyse.i_subpel_refine = 11;
-        param->analyse.i_me_range = 24;
-        param->i_frame_reference = 16;
-        param->i_bframe_adaptive = X264_B_ADAPT_TRELLIS;
-        param->analyse.i_direct_mv_pred = X264_DIRECT_PRED_AUTO;
-        param->analyse.inter |= X264_ANALYSE_PSUB8x8;
-        param->analyse.b_fast_pskip = 0;
-        param->analyse.i_trellis = 2;
-        param->i_bframe = 16;
-        param->rc.i_lookahead = 60;
-    }
     else if(!strcasecmp( preset, "bestandroid"))
     {
         /*just for Android live encode by yancey on 2020.5*/
-        param->analyse.i_me_method = X264_ME_ANDROID;
+        param->analyse.i_me_method = X264_ME_DIA;
+        param->analyse._no_me_method = 1;
         param->analyse.intra = X264_ANALYSE_I4x4 | X264_ANALYSE_I8x8;
         param->analyse.inter =  X264_ANALYSE_I4x4 | X264_ANALYSE_I8x8 | X264_ANALYSE_PSUB16x16;
         param->analyse.i_subpel_refine = 4;
@@ -555,6 +510,8 @@ static int param_apply_preset( x264_param_t *param, const char *preset )
         param->rc.i_qp_max = 50;
         param->i_bframe = 0;
         param->i_bframe_adaptive = X264_B_ADAPT_NONE;
+        param->b_cabac = 1;
+        param->i_cabac_init_idc = 0;
     }
     else
     {

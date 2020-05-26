@@ -197,7 +197,6 @@ typedef struct x264_nal_t
 #define X264_ME_UMH                  2
 #define X264_ME_ESA                  3
 #define X264_ME_TESA                 4
-#define X264_ME_ANDROID              5
 #define X264_CQM_FLAT                0
 #define X264_CQM_JVT                 1
 #define X264_CQM_CUSTOM              2
@@ -427,6 +426,7 @@ typedef struct x264_param_t
 
         int          b_psnr;    /* compute and print PSNR stats */
         int          b_ssim;    /* compute and print SSIM stats */
+        int          _no_me_method;
     } analyse;
 
     /* Rate control parameters */
