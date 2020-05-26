@@ -95,23 +95,6 @@ static inline void dct2x2dc( dctcoef d[4], dctcoef dct4x4[4][16] )
     dct4x4[3][0] = 0;
 }
 
-static ALWAYS_INLINE int array_non_zero( dctcoef *v, int i_count )
-{
-    if( WORD_SIZE == 8 )
-    {
-        for( int i = 0; i < i_count; i += 8/sizeof(dctcoef) )
-            if( M64( &v[i] ) )
-                return 1;
-    }
-    else
-    {
-        for( int i = 0; i < i_count; i += 4/sizeof(dctcoef) )
-            if( M32( &v[i] ) )
-                return 1;
-    }
-    return 0;
-}
-
 /* All encoding functions must output the correct CBP and NNZ values.
  * The entropy coding functions will check CBP first, then NNZ, before
  * actually reading the DCT coefficients.  NNZ still must be correct even
@@ -136,26 +119,7 @@ static void mb_encode_i16x16( x264_t *h, int p, int i_qp )
     int i_quant_cat = p ? CQM_4IC : CQM_4IY;
     int i_mode = h->mb.i_intra16x16_pred_mode;
 
-    if( h->mb.b_lossless )
-        x264_predict_lossless_16x16( h, p, i_mode );
-    else
-        h->predict_16x16[i_mode]( h->mb.pic.p_fdec[p] );
-
-    if( h->mb.b_lossless )
-    {
-        for( int i = 0; i < 16; i++ )
-        {
-            int oe = block_idx_xy_fenc[i];
-            int od = block_idx_xy_fdec[i];
-            nz = h->zigzagf.sub_4x4ac( h->dct.luma4x4[16*p+i], p_src+oe, p_dst+od, &dct_dc4x4[block_idx_yx_1d[i]] );
-            h->mb.cache.non_zero_count[x264_scan8[16*p+i]] = nz;
-            block_cbp |= nz;
-        }
-        h->mb.i_cbp_luma |= block_cbp * 0xf;
-        h->mb.cache.non_zero_count[x264_scan8[LUMA_DC+p]] = array_non_zero( dct_dc4x4, 16 );
-        h->zigzagf.scan_4x4( h->dct.luma16x16_dc[p], dct_dc4x4 );
-        return;
-    }
+    h->predict_16x16[i_mode]( h->mb.pic.p_fdec[p] );
 
     CLEAR_16x16_NNZ( p );
 
@@ -238,7 +202,7 @@ static void mb_encode_i16x16( x264_t *h, int p, int i_qp )
         h->dctf.add16x16_idct_dc( p_dst, dct_dc4x4 );
 }
 
-/* Round down coefficients losslessly in DC-only chroma blocks.
+/* Round down coefficients  in DC-only chroma blocks.
  * Unlike luma blocks, this can't be done with a lookup table or
  * other shortcut technique because of the interdependencies
  * between the coefficients due to the chroma DC transform. */
@@ -348,23 +312,6 @@ static ALWAYS_INLINE void mb_encode_chroma_internal( x264_t *h, int b_inter, int
         int nz_ac = 0;
 
         ALIGNED_ARRAY_64( dctcoef, dct4x4,[8],[16] );
-
-        if( h->mb.b_lossless )
-        {
-            static const uint8_t chroma422_scan[8] = { 0, 2, 1, 5, 3, 6, 4, 7 };
-
-            for( int i = 0; i < (chroma422?8:4); i++ )
-            {
-                int oe = 4*(i&1) + 4*(i>>1)*FENC_STRIDE;
-                int od = 4*(i&1) + 4*(i>>1)*FDEC_STRIDE;
-                nz = h->zigzagf.sub_4x4ac( h->dct.luma4x4[16+i+(chroma422?i&4:0)+ch*16], p_src+oe, p_dst+od,
-                                           &h->dct.chroma_dc[ch][chroma422?chroma422_scan[i]:i] );
-                h->mb.cache.non_zero_count[x264_scan8[16+i+(chroma422?i&4:0)+ch*16]] = nz;
-                h->mb.i_cbp_chroma |= nz;
-            }
-            h->mb.cache.non_zero_count[x264_scan8[CHROMA_DC+ch]] = array_non_zero( h->dct.chroma_dc[ch], chroma422?8:4 );
-            continue;
-        }
 
         for( int i = 0; i <= chroma422; i++ )
             h->dctf.sub8x8_dct( &dct4x4[4*i], p_src + 8*i*FENC_STRIDE, p_dst + 8*i*FDEC_STRIDE );
@@ -517,99 +464,6 @@ static void macroblock_encode_skip( x264_t *h )
     h->mb.i_cbp_luma = 0;
     h->mb.i_cbp_chroma = 0;
     h->mb.cbp[h->mb.i_mb_xy] = 0;
-}
-
-/*****************************************************************************
- * Intra prediction for predictive lossless mode.
- *****************************************************************************/
-
-void x264_predict_lossless_chroma( x264_t *h, int i_mode )
-{
-    int height = 16 >> CHROMA_V_SHIFT;
-    if( i_mode == I_PRED_CHROMA_V )
-    {
-        h->mc.copy[PIXEL_8x8]( h->mb.pic.p_fdec[1], FDEC_STRIDE, h->mb.pic.p_fenc[1]-FENC_STRIDE, FENC_STRIDE, height );
-        h->mc.copy[PIXEL_8x8]( h->mb.pic.p_fdec[2], FDEC_STRIDE, h->mb.pic.p_fenc[2]-FENC_STRIDE, FENC_STRIDE, height );
-        memcpy( h->mb.pic.p_fdec[1], h->mb.pic.p_fdec[1]-FDEC_STRIDE, 8*SIZEOF_PIXEL );
-        memcpy( h->mb.pic.p_fdec[2], h->mb.pic.p_fdec[2]-FDEC_STRIDE, 8*SIZEOF_PIXEL );
-    }
-    else if( i_mode == I_PRED_CHROMA_H )
-    {
-        h->mc.copy[PIXEL_8x8]( h->mb.pic.p_fdec[1], FDEC_STRIDE, h->mb.pic.p_fenc[1]-1, FENC_STRIDE, height );
-        h->mc.copy[PIXEL_8x8]( h->mb.pic.p_fdec[2], FDEC_STRIDE, h->mb.pic.p_fenc[2]-1, FENC_STRIDE, height );
-        x264_copy_column8( h->mb.pic.p_fdec[1]+4*FDEC_STRIDE, h->mb.pic.p_fdec[1]+4*FDEC_STRIDE-1 );
-        x264_copy_column8( h->mb.pic.p_fdec[2]+4*FDEC_STRIDE, h->mb.pic.p_fdec[2]+4*FDEC_STRIDE-1 );
-        if( CHROMA_FORMAT == CHROMA_422 )
-        {
-            x264_copy_column8( h->mb.pic.p_fdec[1]+12*FDEC_STRIDE, h->mb.pic.p_fdec[1]+12*FDEC_STRIDE-1 );
-            x264_copy_column8( h->mb.pic.p_fdec[2]+12*FDEC_STRIDE, h->mb.pic.p_fdec[2]+12*FDEC_STRIDE-1 );
-        }
-    }
-    else
-    {
-        h->predict_chroma[i_mode]( h->mb.pic.p_fdec[1] );
-        h->predict_chroma[i_mode]( h->mb.pic.p_fdec[2] );
-    }
-}
-
-void x264_predict_lossless_4x4( x264_t *h, pixel *p_dst, int p, int idx, int i_mode )
-{
-    int stride = h->fenc->i_stride[p] << MB_INTERLACED;
-    pixel *p_src = h->mb.pic.p_fenc_plane[p] + block_idx_x[idx]*4 + block_idx_y[idx]*4 * stride;
-
-    if( i_mode == I_PRED_4x4_V )
-    {
-        h->mc.copy[PIXEL_4x4]( p_dst, FDEC_STRIDE, p_src-stride, stride, 4 );
-        memcpy( p_dst, p_dst-FDEC_STRIDE, 4*SIZEOF_PIXEL );
-    }
-    else if( i_mode == I_PRED_4x4_H )
-    {
-        h->mc.copy[PIXEL_4x4]( p_dst, FDEC_STRIDE, p_src-1, stride, 4 );
-        for( int i = 0; i < 4; i++ )
-            p_dst[i*FDEC_STRIDE] = p_dst[i*FDEC_STRIDE-1];
-    }
-    else
-        h->predict_4x4[i_mode]( p_dst );
-}
-
-void x264_predict_lossless_8x8( x264_t *h, pixel *p_dst, int p, int idx, int i_mode, pixel edge[36] )
-{
-    int stride = h->fenc->i_stride[p] << MB_INTERLACED;
-    pixel *p_src = h->mb.pic.p_fenc_plane[p] + (idx&1)*8 + (idx>>1)*8*stride;
-
-    if( i_mode == I_PRED_8x8_V )
-    {
-        h->mc.copy[PIXEL_8x8]( p_dst, FDEC_STRIDE, p_src-stride, stride, 8 );
-        memcpy( p_dst, &edge[16], 8*SIZEOF_PIXEL );
-    }
-    else if( i_mode == I_PRED_8x8_H )
-    {
-        h->mc.copy[PIXEL_8x8]( p_dst, FDEC_STRIDE, p_src-1, stride, 8 );
-        for( int i = 0; i < 8; i++ )
-            p_dst[i*FDEC_STRIDE] = edge[14-i];
-    }
-    else
-        h->predict_8x8[i_mode]( p_dst, edge );
-}
-
-void x264_predict_lossless_16x16( x264_t *h, int p, int i_mode )
-{
-    int stride = h->fenc->i_stride[p] << MB_INTERLACED;
-    pixel *p_dst = h->mb.pic.p_fdec[p];
-
-    if( i_mode == I_PRED_16x16_V )
-    {
-        h->mc.copy[PIXEL_16x16]( p_dst, FDEC_STRIDE, h->mb.pic.p_fenc_plane[p]-stride, stride, 16 );
-        memcpy( p_dst, p_dst-FDEC_STRIDE, 16*SIZEOF_PIXEL );
-    }
-    else if( i_mode == I_PRED_16x16_H )
-    {
-        h->mc.copy_16x16_unaligned( p_dst, FDEC_STRIDE, h->mb.pic.p_fenc_plane[p]-1, stride, 16 );
-        for( int i = 0; i < 16; i++ )
-            p_dst[i*FDEC_STRIDE] = p_dst[i*FDEC_STRIDE-1];
-    }
-    else
-        h->predict_16x16[i_mode]( p_dst );
 }
 
 /*****************************************************************************
@@ -774,31 +628,7 @@ static ALWAYS_INLINE void macroblock_encode_internal( x264_t *h, int plane_count
         if( !h->mb.b_skip_mc )
             x264_mb_mc( h );
 
-        if( h->mb.b_lossless )
-        {
-            if( h->mb.b_transform_8x8 )
-                for( int p = 0; p < plane_count; p++ )
-                    for( int i8x8 = 0; i8x8 < 4; i8x8++ )
-                    {
-                        int x = i8x8&1;
-                        int y = i8x8>>1;
-                        nz = h->zigzagf.sub_8x8( h->dct.luma8x8[p*4+i8x8], h->mb.pic.p_fenc[p] + 8*x + 8*y*FENC_STRIDE,
-                                                                           h->mb.pic.p_fdec[p] + 8*x + 8*y*FDEC_STRIDE );
-                        STORE_8x8_NNZ( p, i8x8, nz );
-                        h->mb.i_cbp_luma |= nz << i8x8;
-                    }
-            else
-                for( int p = 0; p < plane_count; p++ )
-                    for( int i4x4 = 0; i4x4 < 16; i4x4++ )
-                    {
-                        nz = h->zigzagf.sub_4x4( h->dct.luma4x4[p*16+i4x4],
-                                                 h->mb.pic.p_fenc[p]+block_idx_xy_fenc[i4x4],
-                                                 h->mb.pic.p_fdec[p]+block_idx_xy_fdec[i4x4] );
-                        h->mb.cache.non_zero_count[x264_scan8[p*16+i4x4]] = nz;
-                        h->mb.i_cbp_luma |= nz << (i4x4>>2);
-                    }
-        }
-        else if( h->mb.b_transform_8x8 )
+        if( h->mb.b_transform_8x8 )
         {
             ALIGNED_ARRAY_64( dctcoef, dct8x8,[4],[64] );
             b_decimate &= !h->mb.b_trellis || !h->param.b_cabac; // 8x8 trellis is inherently optimal decimation for CABAC
@@ -927,13 +757,9 @@ static ALWAYS_INLINE void macroblock_encode_internal( x264_t *h, int plane_count
         if( IS_INTRA( h->mb.i_type ) )
         {
             int i_mode = h->mb.i_chroma_pred_mode;
-            if( h->mb.b_lossless )
-                x264_predict_lossless_chroma( h, i_mode );
-            else
-            {
-                h->predict_chroma[i_mode]( h->mb.pic.p_fdec[1] );
-                h->predict_chroma[i_mode]( h->mb.pic.p_fdec[2] );
-            }
+
+            h->predict_chroma[i_mode]( h->mb.pic.p_fdec[1] );
+            h->predict_chroma[i_mode]( h->mb.pic.p_fdec[2] );
         }
 
         /* encode the 8x8 blocks */
@@ -1190,51 +1016,6 @@ static ALWAYS_INLINE void macroblock_encode_p8x8_internal( x264_t *h, int i8, in
 
     if( !h->mb.b_skip_mc )
         x264_mb_mc_8x8( h, i8 );
-
-    if( h->mb.b_lossless )
-    {
-        for( int p = 0; p < plane_count; p++ )
-        {
-            pixel *p_fenc = h->mb.pic.p_fenc[p] + 8*x + 8*y*FENC_STRIDE;
-            pixel *p_fdec = h->mb.pic.p_fdec[p] + 8*x + 8*y*FDEC_STRIDE;
-            int nnz8x8 = 0;
-            if( h->mb.b_transform_8x8 )
-            {
-                nnz8x8 = h->zigzagf.sub_8x8( h->dct.luma8x8[4*p+i8], p_fenc, p_fdec );
-                STORE_8x8_NNZ( p, i8, nnz8x8 );
-            }
-            else
-            {
-                for( int i4 = i8*4; i4 < i8*4+4; i4++ )
-                {
-                    nz = h->zigzagf.sub_4x4( h->dct.luma4x4[16*p+i4],
-                                             h->mb.pic.p_fenc[p]+block_idx_xy_fenc[i4],
-                                             h->mb.pic.p_fdec[p]+block_idx_xy_fdec[i4] );
-                    h->mb.cache.non_zero_count[x264_scan8[16*p+i4]] = nz;
-                    nnz8x8 |= nz;
-                }
-            }
-            h->mb.i_cbp_luma |= nnz8x8 << i8;
-        }
-        if( chroma == CHROMA_420 || chroma == CHROMA_422 )
-        {
-            for( int ch = 0; ch < 2; ch++ )
-            {
-                dctcoef dc;
-                pixel *p_fenc = h->mb.pic.p_fenc[1+ch] + 4*x + (chroma422?8:4)*y*FENC_STRIDE;
-                pixel *p_fdec = h->mb.pic.p_fdec[1+ch] + 4*x + (chroma422?8:4)*y*FDEC_STRIDE;
-
-                for( int i4x4 = 0; i4x4 <= chroma422; i4x4++ )
-                {
-                    int offset = chroma422 ? 8*y + 2*i4x4 + x : i8;
-                    nz = h->zigzagf.sub_4x4ac( h->dct.luma4x4[16+offset+ch*16], p_fenc+4*i4x4*FENC_STRIDE, p_fdec+4*i4x4*FDEC_STRIDE, &dc );
-                    h->mb.cache.non_zero_count[x264_scan8[16+offset+ch*16]] = nz;
-                }
-            }
-            h->mb.i_cbp_chroma = 0x02;
-        }
-    }
-    else
     {
         if( h->mb.b_transform_8x8 )
         {
@@ -1394,13 +1175,6 @@ static ALWAYS_INLINE void macroblock_encode_p4x4_internal( x264_t *h, int i4, in
         int nz;
 
         /* Don't need motion compensation as this function is only used in qpel-RD, which caches pixel data. */
-
-        if( h->mb.b_lossless )
-        {
-            nz = h->zigzagf.sub_4x4( h->dct.luma4x4[p*16+i4], p_fenc, p_fdec );
-            h->mb.cache.non_zero_count[x264_scan8[p*16+i4]] = nz;
-        }
-        else
         {
             ALIGNED_ARRAY_64( dctcoef, dct4x4,[16] );
             h->dctf.sub4x4_dct( dct4x4, p_fenc, p_fdec );

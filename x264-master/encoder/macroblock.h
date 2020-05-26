@@ -40,15 +40,6 @@ int x264_macroblock_probe_skip( x264_t *h, int b_bidir );
 #define x264_macroblock_probe_bskip( h )\
     x264_macroblock_probe_skip( h, 1 )
 
-#define x264_predict_lossless_4x4 x264_template(predict_lossless_4x4)
-void x264_predict_lossless_4x4( x264_t *h, pixel *p_dst, int p, int idx, int i_mode );
-#define x264_predict_lossless_8x8 x264_template(predict_lossless_8x8)
-void x264_predict_lossless_8x8( x264_t *h, pixel *p_dst, int p, int idx, int i_mode, pixel edge[36] );
-#define x264_predict_lossless_16x16 x264_template(predict_lossless_16x16)
-void x264_predict_lossless_16x16( x264_t *h, int p, int i_mode );
-#define x264_predict_lossless_chroma x264_template(predict_lossless_chroma)
-void x264_predict_lossless_chroma( x264_t *h, int i_mode );
-
 #define x264_macroblock_encode x264_template(macroblock_encode)
 void x264_macroblock_encode      ( x264_t *h );
 #define x264_macroblock_write_cabac x264_template(macroblock_write_cabac)
@@ -138,20 +129,8 @@ static ALWAYS_INLINE void x264_mb_encode_i4x4( x264_t *h, int p, int idx, int i_
 
     if( b_predict )
     {
-        if( h->mb.b_lossless )
-            x264_predict_lossless_4x4( h, p_dst, p, idx, i_mode );
-        else
-            h->predict_4x4[i_mode]( p_dst );
+        h->predict_4x4[i_mode]( p_dst );
     }
-
-    if( h->mb.b_lossless )
-    {
-        nz = h->zigzagf.sub_4x4( h->dct.luma4x4[p*16+idx], p_src, p_dst );
-        h->mb.cache.non_zero_count[x264_scan8[p*16+idx]] = nz;
-        h->mb.i_cbp_luma |= nz<<(idx>>2);
-        return;
-    }
-
     h->dctf.sub4x4_dct( dct4x4, p_src, p_dst );
 
     nz = x264_quant_4x4( h, dct4x4, i_qp, ctx_cat_plane[DCT_LUMA_4x4][p], 1, p, idx );
@@ -182,19 +161,7 @@ static ALWAYS_INLINE void x264_mb_encode_i8x8( x264_t *h, int p, int idx, int i_
             h->predict_8x8_filter( p_dst, edge_buf, h->mb.i_neighbour8[idx], x264_pred_i4x4_neighbors[i_mode] );
             edge = edge_buf;
         }
-
-        if( h->mb.b_lossless )
-            x264_predict_lossless_8x8( h, p_dst, p, idx, i_mode, edge );
-        else
-            h->predict_8x8[i_mode]( p_dst, edge );
-    }
-
-    if( h->mb.b_lossless )
-    {
-        nz = h->zigzagf.sub_8x8( h->dct.luma8x8[p*4+idx], p_src, p_dst );
-        STORE_8x8_NNZ( p, idx, nz );
-        h->mb.i_cbp_luma |= nz<<idx;
-        return;
+        h->predict_8x8[i_mode]( p_dst, edge );
     }
 
     h->dctf.sub8x8_dct8( dct8x8, p_src, p_dst );
