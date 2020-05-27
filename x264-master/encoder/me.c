@@ -420,7 +420,7 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
         m->cost = X264_MIN( bpred_cost, bcost );
     }
     /* subpel refine */
-    if(bcost > 50){
+    if(bcost > 365){
         if( h->mb.i_subpel_refine >= 2 ){
             int hpel = subpel_iterations[h->mb.i_subpel_refine][2];
             int qpel = subpel_iterations[h->mb.i_subpel_refine][3];
@@ -508,30 +508,29 @@ static void refine_subpel( x264_t *h, x264_me_t *m, int hpel_iters, int qpel_ite
     int bmx = m->mv[0];
     int bmy = m->mv[1];
     int bcost = m->cost;
-    
-    if( bmy > h->mb.mv_min_spel[1] && bmy < h->mb.mv_max_spel[1] && bmx > h->mb.mv_min_spel[0] && bmx < h->mb.mv_max_spel[0] )
-    {
-        int omx = bmx, omy = bmy;
-        /* We have to use mc_luma because all strides must be the same to use fpelcmp_x4 */
-        h->mc.mc_luma( pix   , 64, m->p_fref, m->i_stride[0], omx, omy-1, bw, bh, &m->weight[0] );
-        h->mc.mc_luma( pix+16, 64, m->p_fref, m->i_stride[0], omx, omy+1, bw, bh, &m->weight[0] );
-        h->mc.mc_luma( pix+32, 64, m->p_fref, m->i_stride[0], omx-1, omy, bw, bh, &m->weight[0] );
-        h->mc.mc_luma( pix+48, 64, m->p_fref, m->i_stride[0], omx+1, omy, bw, bh, &m->weight[0] );
-        h->pixf.fpelcmp_x4[i_pixel]( m->p_fenc[0], pix, pix+16, pix+32, pix+48, 64, costs );
-        costs[0] += p_cost_mvx[omx  ] + p_cost_mvy[omy-1];
-        costs[1] += p_cost_mvx[omx  ] + p_cost_mvy[omy+1];
-        costs[2] += p_cost_mvx[omx-1] + p_cost_mvy[omy  ];
-        costs[3] += p_cost_mvx[omx+1] + p_cost_mvy[omy  ];
-        bcost <<= 4;
-        COPY1_IF_LT( bcost, (costs[0]<<4)+1 );
-        COPY1_IF_LT( bcost, (costs[1]<<4)+3 );
-        COPY1_IF_LT( bcost, (costs[2]<<4)+4 );
-        COPY1_IF_LT( bcost, (costs[3]<<4)+12 );
-        bmx -= (bcost<<28)>>30;
-        bmy -= (bcost<<30)>>30;
-        bcost >>= 4;
-    }
-
+    if(bcost > 365){
+        if( bmy > h->mb.mv_min_spel[1] && bmy < h->mb.mv_max_spel[1] && bmx > h->mb.mv_min_spel[0] && bmx < h->mb.mv_max_spel[0] ){
+            int omx = bmx, omy = bmy;
+            /* We have to use mc_luma because all strides must be the same to use fpelcmp_x4 */
+            h->mc.mc_luma( pix   , 64, m->p_fref, m->i_stride[0], omx, omy-1, bw, bh, &m->weight[0] );
+            h->mc.mc_luma( pix+16, 64, m->p_fref, m->i_stride[0], omx, omy+1, bw, bh, &m->weight[0] );
+            h->mc.mc_luma( pix+32, 64, m->p_fref, m->i_stride[0], omx-1, omy, bw, bh, &m->weight[0] );
+            h->mc.mc_luma( pix+48, 64, m->p_fref, m->i_stride[0], omx+1, omy, bw, bh, &m->weight[0] );
+            h->pixf.fpelcmp_x4[i_pixel]( m->p_fenc[0], pix, pix+16, pix+32, pix+48, 64, costs );
+            costs[0] += p_cost_mvx[omx  ] + p_cost_mvy[omy-1];
+            costs[1] += p_cost_mvx[omx  ] + p_cost_mvy[omy+1];
+            costs[2] += p_cost_mvx[omx-1] + p_cost_mvy[omy  ];
+            costs[3] += p_cost_mvx[omx+1] + p_cost_mvy[omy  ];
+            bcost <<= 4;
+            COPY1_IF_LT( bcost, (costs[0]<<4)+1 );
+            COPY1_IF_LT( bcost, (costs[1]<<4)+3 );
+            COPY1_IF_LT( bcost, (costs[2]<<4)+4 );
+            COPY1_IF_LT( bcost, (costs[3]<<4)+12 );
+            bmx -= (bcost<<28)>>30;
+            bmy -= (bcost<<30)>>30;
+            bcost >>= 4;
+        }
+    } 
     m->cost = bcost;
     m->mv[0] = bmx;
     m->mv[1] = bmy;
