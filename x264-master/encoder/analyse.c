@@ -2836,13 +2836,17 @@ skip_analysis:
             }
             if(_left + _top + _topleft + _topright >= 2){
                 if(analysis.l0.me16x16.cost - 4*_thresh > analysis.i_satd_i16x16 || 
-                   analysis.l0.me16x16.cost - analysis.l0.me16x16.i_ref_cost > 24*_thresh ||
-                   abs(analysis.l0.me16x16.cost - analysis.l0.me16x16.i_ref_cost < 8*_thresh)){
+                   analysis.l0.me16x16.cost - analysis.l0.me16x16.i_ref_cost > 24*_thresh){
                     _auxMode = 0;
                 }
             }
-            
-            if((flags & X264_ANALYSE_PSUB16x16) && _auxMode ){
+            if(_auxMode){
+                if(abs(analysis.l0.me16x16.cost - analysis.l0.me16x16.i_ref_cost) < (_thresh>>1)){
+                    _auxMode = 0;
+                }
+            }
+            _auxMode = 0;//test
+            if((flags & X264_ANALYSE_PSUB16x16) && _auxMode){
                 mb_analyse_inter_p8x8( h, &analysis );
             }
             if( ( flags & X264_ANALYSE_PSUB16x16 ) && (!analysis.b_early_terminate ||

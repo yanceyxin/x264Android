@@ -501,100 +501,15 @@ static void refine_subpel( x264_t *h, x264_me_t *m, int hpel_iters, int qpel_ite
     const uint16_t *p_cost_mvx = m->p_cost_mv - m->mvp[0];
     const uint16_t *p_cost_mvy = m->p_cost_mv - m->mvp[1];
     const int i_pixel = m->i_pixel;
-    const int b_chroma_me = h->mb.b_chroma_me && (i_pixel <= PIXEL_8x8 || CHROMA444);
-    int chromapix = h->luma2chroma_pixel[i_pixel];
-    int chroma_v_shift = CHROMA_V_SHIFT;
-    int mvy_offset = chroma_v_shift & MB_INTERLACED & m->i_ref ? (h->mb.i_mb_y & 1)*4 - 2 : 0;
-
+   
     ALIGNED_ARRAY_32( pixel, pix,[64*18] ); // really 17x17x2, but round up for alignment
     ALIGNED_ARRAY_16( int, costs,[4] );
 
     int bmx = m->mv[0];
     int bmy = m->mv[1];
     int bcost = m->cost;
-    int odir = -1, bdir;
-
-    /* halfpel diamond search */
-    if( hpel_iters )
-    {
-        /* try the subpel component of the predicted mv */
-        if( h->mb.i_subpel_refine < 3 )
-        {
-            int mx = x264_clip3( m->mvp[0], h->mb.mv_min_spel[0]+2, h->mb.mv_max_spel[0]-2 );
-            int my = x264_clip3( m->mvp[1], h->mb.mv_min_spel[1]+2, h->mb.mv_max_spel[1]-2 );
-            if( (mx-bmx)|(my-bmy) )
-                COST_MV_SAD( mx, my );
-        }
-
-        bcost <<= 6;
-        for( int i = hpel_iters; i > 0; i-- )
-        {
-            int omx = bmx, omy = bmy;
-            intptr_t stride = 64; // candidates are either all hpel or all qpel, so one stride is enough
-            pixel *src0, *src1, *src2, *src3;
-            src0 = h->mc.get_ref( pix,    &stride, m->p_fref, m->i_stride[0], omx, omy-2, bw, bh+1, &m->weight[0] );
-            src2 = h->mc.get_ref( pix+32, &stride, m->p_fref, m->i_stride[0], omx-2, omy, bw+4, bh, &m->weight[0] );
-            src1 = src0 + stride;
-            src3 = src2 + 1;
-            h->pixf.fpelcmp_x4[i_pixel]( m->p_fenc[0], src0, src1, src2, src3, stride, costs );
-            costs[0] += p_cost_mvx[omx  ] + p_cost_mvy[omy-2];
-            costs[1] += p_cost_mvx[omx  ] + p_cost_mvy[omy+2];
-            costs[2] += p_cost_mvx[omx-2] + p_cost_mvy[omy  ];
-            costs[3] += p_cost_mvx[omx+2] + p_cost_mvy[omy  ];
-            COPY1_IF_LT( bcost, (costs[0]<<6)+2 );
-            COPY1_IF_LT( bcost, (costs[1]<<6)+6 );
-            COPY1_IF_LT( bcost, (costs[2]<<6)+16 );
-            COPY1_IF_LT( bcost, (costs[3]<<6)+48 );
-            if( !(bcost&63) )
-                break;
-            bmx -= (bcost<<26)>>29;
-            bmy -= (bcost<<29)>>29;
-            bcost &= ~63;
-        }
-        bcost >>= 6;
-    }
-
-    if( !b_refine_qpel && (h->pixf.mbcmp_unaligned[0] != h->pixf.fpelcmp[0] || b_chroma_me) )
-    {
-        bcost = COST_MAX;
-        COST_MV_SATD( bmx, bmy, -1 );
-    }
-
-    /* early termination when examining multiple reference frames */
-    if( p_halfpel_thresh )
-    {
-        if( (bcost*7)>>3 > *p_halfpel_thresh )
-        {
-            m->cost = bcost;
-            m->mv[0] = bmx;
-            m->mv[1] = bmy;
-            // don't need cost_mv
-            return;
-        }
-        else if( bcost < *p_halfpel_thresh )
-            *p_halfpel_thresh = bcost;
-    }
-
-    /* quarterpel diamond search */
-    if( h->mb.i_subpel_refine != 1 )
-    {
-        bdir = -1;
-        for( int i = qpel_iters; i > 0; i-- )
-        {
-            if( bmy <= h->mb.mv_min_spel[1] || bmy >= h->mb.mv_max_spel[1] || bmx <= h->mb.mv_min_spel[0] || bmx >= h->mb.mv_max_spel[0] )
-                break;
-            odir = bdir;
-            int omx = bmx, omy = bmy;
-            COST_MV_SATD( omx, omy - 1, 0 );
-            COST_MV_SATD( omx, omy + 1, 1 );
-            COST_MV_SATD( omx - 1, omy, 2 );
-            COST_MV_SATD( omx + 1, omy, 3 );
-            if( (bmx == omx) & (bmy == omy) )
-                break;
-        }
-    }
-    /* Special simplified case for subme=1 */
-    else if( bmy > h->mb.mv_min_spel[1] && bmy < h->mb.mv_max_spel[1] && bmx > h->mb.mv_min_spel[0] && bmx < h->mb.mv_max_spel[0] )
+    
+    if( bmy > h->mb.mv_min_spel[1] && bmy < h->mb.mv_max_spel[1] && bmx > h->mb.mv_min_spel[0] && bmx < h->mb.mv_max_spel[0] )
     {
         int omx = bmx, omy = bmy;
         /* We have to use mc_luma because all strides must be the same to use fpelcmp_x4 */
