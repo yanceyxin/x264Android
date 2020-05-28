@@ -850,7 +850,7 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
             {
                 h->zigzagf.scan_4x4( dctscan, dct4x4[idx] );
                 i_decimate_mb += h->quantf.decimate_score16( dctscan );
-                if( i_decimate_mb > 12 )
+                if( i_decimate_mb > 15 )
                     return 0;
             }
         }
@@ -941,7 +941,7 @@ static ALWAYS_INLINE int macroblock_probe_skip_internal( x264_t *h, int b_bidir,
                 {
                     h->zigzagf.scan_4x4( dctscan, dct4x4[idx] );
                     i_decimate_mb += h->quantf.decimate_score15( dctscan );
-                    if( i_decimate_mb > 13 )
+                    if( i_decimate_mb > 16 )
                         return 0;
                 }
             }

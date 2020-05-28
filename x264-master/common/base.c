@@ -500,20 +500,23 @@ static int param_apply_preset( x264_param_t *param, const char *preset )
         param->analyse.intra = X264_ANALYSE_I4x4 | X264_ANALYSE_I8x8;
         param->analyse.inter =  X264_ANALYSE_I4x4 | X264_ANALYSE_I8x8 | X264_ANALYSE_PSUB16x16;
         param->analyse.i_subpel_refine = 4;
-        param->analyse.i_noise_reduction = 200;
+        param->analyse.i_noise_reduction = 20;
         param->analyse.i_weighted_pred = X264_WEIGHTP_SIMPLE;
         param->analyse.i_trellis = 0;
         param->analyse.b_mixed_references = 0;
         param->i_frame_reference = 1;
         param->rc.i_lookahead = 10;
-        param->rc.i_qp_min = 8;
+        param->rc.i_qp_min = 10;
         param->rc.i_qp_max = 50;
         param->rc.b_mb_tree = 1;
+        param->rc.i_aq_mode = X264_AQ_VARIANCE;
+        param->rc.f_aq_strength = 0.5;
+        param->rc.f_ip_factor = 1.4;
+        param->rc.f_pb_factor = 1.3;
         param->i_bframe = 0;
         param->i_bframe_adaptive = X264_B_ADAPT_NONE;
         param->b_cabac = 0;
         param->i_cabac_init_idc = 0;
-
     }
     else
     {

@@ -406,21 +406,19 @@ void x264_me_search_ref( x264_t *h, x264_me_t *m, int16_t (*mvc)[2], int i_mvc, 
     /* -> qpel mv */
     uint32_t bmv = pack16to32_mask(bmx,bmy);
     uint32_t bmv_spel = SPELx2(bmv);
-    if( h->mb.i_subpel_refine < 3 )
-    {
+    if( h->mb.i_subpel_refine < 3){
         m->cost_mv = p_cost_mvx[bmx<<2] + p_cost_mvy[bmy<<2];
         m->cost = bcost;
         /* compute the real cost */
         if( bmv == pmv ) m->cost += m->cost_mv;
         M32( m->mv ) = bmv_spel;
     }
-    else
-    {
+    else{
         M32(m->mv) = bpred_cost < bcost ? bpred_mv : bmv_spel;
         m->cost = X264_MIN( bpred_cost, bcost );
     }
     /* subpel refine */
-    if(bcost > 365){
+    if(bcost > 666){
         if( h->mb.i_subpel_refine >= 2 ){
             int hpel = subpel_iterations[h->mb.i_subpel_refine][2];
             int qpel = subpel_iterations[h->mb.i_subpel_refine][3];
