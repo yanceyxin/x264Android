@@ -45,7 +45,7 @@ extern "C" {
 
 #include "x264_config.h"
 
-#define X264_BUILD 160
+#define X264_BUILD 157
 
 #ifdef _WIN32
 #   define X264_DLL_IMPORT __declspec(dllimport)
@@ -584,6 +584,9 @@ typedef struct x264_param_t
      * e.g. if doing multiple encodes in one process.
      */
     void (*nalu_process)( x264_t *h, x264_nal_t *nal, void *opaque );
+    //for test
+    int roi_qp;
+    int non_roi_qp;
 } x264_param_t;
 
 X264_API void x264_nal_encode( x264_t *h, uint8_t *dst, x264_nal_t *nal );
